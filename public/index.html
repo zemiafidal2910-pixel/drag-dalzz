@@ -1,0 +1,379 @@
+
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#080b16">
+<title>DRAG DALZZ - 3D Racing</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#080b16;color:white;
+ font-family:Arial,sans-serif;overflow-x:hidden;
+}
+header{
+ padding:18px;text-align:center;
+ background:#11182a;border-bottom:1px solid #263653;
+}
+.logo{font-size:27px;font-weight:900;color:#54c7ff}
+.logo span{color:#ffae36}
+.sub{font-size:11px;color:#9baac4;margin-top:5px}
+.container{max-width:750px;margin:auto;padding:14px}
+.panel{
+ background:#131c30;border:1px solid #293955;
+ border-radius:15px;padding:15px;margin-bottom:13px;
+}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.badge{font-size:11px;color:#61f5a7}
+input{
+ background:#080f20;color:white;border:1px solid #354762;
+ border-radius:9px;padding:12px;width:100%;margin-top:10px;
+}
+button{
+ border:0;border-radius:10px;padding:12px 17px;
+ color:white;background:#237be8;font-weight:bold;
+ cursor:pointer;
+}
+button:active{transform:scale(.97)}
+button:disabled{opacity:.5}
+#track{
+ width:100%;height:260px;display:block;
+ background:#11182b;border-radius:12px;
+}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+.stat{
+ background:#0b1425;padding:12px 5px;
+ border-radius:10px;text-align:center;
+}
+.stat strong{display:block;font-size:23px;color:#53c7ff}
+.stat small{font-size:10px;color:#9baac4}
+.carinfo{font-size:12px;color:#b8c9e5}
+.controls{display:flex;gap:12px;margin-top:14px}
+#gas{
+ flex:1;height:85px;background:linear-gradient(135deg,#ff8a24,#e73522);
+ font-size:21px;touch-action:none;
+}
+#start{flex:1;height:85px;background:#168e63;font-size:17px}
+.progress{
+ height:9px;background:#27334b;border-radius:20px;
+ overflow:hidden;margin-top:10px;
+}
+#progress{height:100%;width:0%;background:#48d6ff}
+footer{text-align:center;padding:20px;color:#71829e;font-size:11px}
+</style>
+</head>
+
+<body>
+<header>
+ <div class="logo">DRAG <span>DALZZ</span></div>
+ <div class="sub">3D DRAG RACING • MULTIPLAYER</div>
+</header>
+
+<main class="container">
+
+ <section class="panel">
+  <div class="row">
+   <b>🏁 RACE ROOM</b>
+   <span class="badge" id="connection">● OFFLINE</span>
+  </div>
+  <input id="room" value="DALZZ-001" maxlength="32"
+   placeholder="Nama room">
+  <div class="row" style="margin-top:10px">
+   <button onclick="connectRoom()">JOIN ROOM</button>
+   <span class="carinfo" id="players">Pemain: 0</span>
+  </div>
+ </section>
+
+ <section class="panel">
+  <div class="row">
+   <b>🏎️ RACE TRACK</b>
+   <span class="badge">MAX 500 KM/H</span>
+  </div>
+  <canvas id="track"></canvas>
+  <div class="stats" style="margin-top:12px">
+   <div class="stat">
+    <strong id="speed">0</strong>
+    <small>KM/H</small>
+   </div>
+   <div class="stat">
+    <strong id="distance">0</strong>
+    <small>METER</small>
+   </div>
+   <div class="stat">
+    <strong id="time">0.00</strong>
+    <small>DETIK</small>
+   </div>
+  </div>
+ </section>
+
+ <section class="panel">
+  <div class="row">
+   <b>🏆 RACE PROGRESS</b>
+   <span id="status">SIAP BALAP</span>
+  </div>
+  <div class="progress"><div id="progress"></div></div>
+  <div class="carinfo" style="margin-top:10px">
+   Jarak lawan: <span id="opponent">Menunggu pemain...</span>
+  </div>
+  <div class="controls">
+   <button id="start" onclick="startRace()">START RACE</button>
+   <button id="gas">GAS 🚀</button>
+  </div>
+ </section>
+
+ <section class="panel">
+  <b>🚘 GARASI</b>
+  <p class="carinfo">DALZZ SUPRA • Racing Edition</p>
+  <div class="row">
+   <span class="carinfo">Mesin: Turbo Racing</span>
+   <span class="badge">LEVEL 1</span>
+  </div>
+ </section>
+
+</main>
+
+<footer>
+DRAG DALZZ © 2026 • Created by AFDALZZ
+</footer>
+
+<script>
+const canvas=document.getElementById("track");
+const ctx=canvas.getContext("2d");
+
+let speed=0;
+let distance=0;
+let elapsed=0;
+let racing=false;
+let gas=false;
+let socket=null;
+let opponentDistance=0;
+let lastUpdate=0;
+let startTime=0;
+
+function resize(){
+ const w=canvas.clientWidth;
+ canvas.width=w*devicePixelRatio;
+ canvas.height=260*devicePixelRatio;
+ ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+}
+window.addEventListener("resize",resize);
+resize();
+
+function draw(){
+ const w=canvas.clientWidth;
+ const h=260;
+ ctx.clearRect(0,0,w,h);
+
+ const sky=ctx.createLinearGradient(0,0,0,h);
+ sky.addColorStop(0,"#101d39");
+ sky.addColorStop(1,"#455b79");
+ ctx.fillStyle=sky;
+ ctx.fillRect(0,0,w,h);
+
+ // Horizon
+ ctx.fillStyle="#182c36";
+ ctx.fillRect(0,115,w,35);
+
+ // Road perspective
+ ctx.fillStyle="#292d37";
+ ctx.beginPath();
+ ctx.moveTo(w*.46,115);
+ ctx.lineTo(w*.54,115);
+ ctx.lineTo(w*.94,h);
+ ctx.lineTo(w*.06,h);
+ ctx.closePath();
+ ctx.fill();
+
+ // Road edges
+ ctx.strokeStyle="#e4e8ed";
+ ctx.lineWidth=3;
+ ctx.beginPath();
+ ctx.moveTo(w*.46,115);
+ ctx.lineTo(w*.06,h);
+ ctx.moveTo(w*.54,115);
+ ctx.lineTo(w*.94,h);
+ ctx.stroke();
+
+ // Lane markers
+ ctx.strokeStyle="#ffffff";
+ ctx.lineWidth=2;
+ for(let i=0;i<8;i++){
+  const y=((i*38+(distance*.8)%38)%150)+120;
+  const t=(y-115)/145;
+  const x=w/2;
+  const width=2+t*3;
+  ctx.fillStyle="#ffffff";
+  ctx.fillRect(x-width/2,y,width,5+t*8);
+ }
+
+ // Cars
+ function car(x,y,color,scale){
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(scale,scale);
+  ctx.fillStyle="#090b12";
+  ctx.fillRect(-17,15,7,15);
+  ctx.fillRect(10,15,7,15);
+  ctx.fillStyle=color;
+  ctx.beginPath();
+  ctx.moveTo(-20,20);
+  ctx.lineTo(-15,-5);
+  ctx.lineTo(-9,-17);
+  ctx.lineTo(9,-17);
+  ctx.lineTo(15,-5);
+  ctx.lineTo(20,20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle="#a9eaff";
+  ctx.fillRect(-10,-10,20,9);
+  ctx.fillStyle="#ff3030";
+  ctx.fillRect(-15,13,6,4);
+  ctx.fillRect(9,13,6,4);
+  ctx.restore();
+ }
+
+ car(w*.5,h-60,"#13a9ff",1.45);
+
+ // Opponent indicator
+ if(opponentDistance>0){
+  car(w*.5-35,145,"#ffad37",.45);
+ }
+
+ requestAnimationFrame(draw);
+}
+draw();
+
+function updateUI(){
+ document.getElementById("speed").textContent=Math.round(speed);
+ document.getElementById("distance").textContent=Math.floor(distance);
+ document.getElementById("time").textContent=elapsed.toFixed(2);
+ document.getElementById("progress").style.width=
+  Math.min(100,distance/400*100)+"%";
+ document.getElementById("opponent").textContent=
+  Math.floor(opponentDistance)+" meter";
+}
+
+function send(data){
+ if(socket && socket.readyState===WebSocket.OPEN){
+  socket.send(JSON.stringify(data));
+ }
+}
+
+function connectRoom(){
+ const room=document.getElementById("room").value.trim();
+ if(!room)return alert("Masukkan nama room!");
+
+ if(socket)socket.close();
+
+ const protocol=location.protocol==="https:"?"wss:":"ws:";
+ socket=new WebSocket(
+  protocol+"//"+location.host+
+  "/api/room?room="+encodeURIComponent(room)
+ );
+
+ document.getElementById("connection").textContent="● CONNECTING";
+
+ socket.onopen=()=>{
+  document.getElementById("connection").textContent="● ONLINE";
+  document.getElementById("connection").style.color="#61f5a7";
+ };
+
+ socket.onmessage=(event)=>{
+  try{
+   const data=JSON.parse(event.data);
+
+   if(data.players!==undefined){
+    document.getElementById("players").textContent=
+     "Pemain: "+data.players;
+   }
+
+   if(data.type==="PLAYER_UPDATE"){
+    opponentDistance=data.distance||0;
+    updateUI();
+   }
+
+   if(data.type==="RACE_START"){
+    document.getElementById("status").textContent="LAWAN MULAI!";
+   }
+
+  }catch(e){}
+ };
+
+ socket.onclose=()=>{
+  document.getElementById("connection").textContent="● OFFLINE";
+ };
+}
+
+function startRace(){
+ speed=0;
+ distance=0;
+ elapsed=0;
+ racing=true;
+ startTime=performance.now();
+ document.getElementById("status").textContent="RACING!";
+ send({type:"RACE_START"});
+}
+
+const gasButton=document.getElementById("gas");
+
+function gasDown(e){
+ e.preventDefault();
+ gas=true;
+}
+function gasUp(){
+ gas=false;
+}
+
+gasButton.addEventListener("pointerdown",gasDown);
+gasButton.addEventListener("pointerup",gasUp);
+gasButton.addEventListener("pointerleave",gasUp);
+gasButton.addEventListener("pointercancel",gasUp);
+
+window.addEventListener("keydown",e=>{
+ if(e.code==="Space" || e.code==="ArrowUp")gas=true;
+});
+window.addEventListener("keyup",e=>{
+ if(e.code==="Space" || e.code==="ArrowUp")gas=false;
+});
+
+let previous=performance.now();
+
+function loop(now){
+ const dt=Math.min((now-previous)/1000,.05);
+ previous=now;
+
+ if(racing){
+  if(gas){
+   speed=Math.min(500,speed+180*dt);
+  }else{
+   speed=Math.max(0,speed-65*dt);
+  }
+
+  distance+=speed/3.6*dt;
+  elapsed=(now-startTime)/1000;
+
+  if(distance>=400){
+   distance=400;
+   racing=false;
+   gas=false;
+   speed=0;
+   document.getElementById("status").textContent="FINISH! 🏆";
+   send({type:"RACE_FINISH",distance:distance});
+  }
+
+  if(now-lastUpdate>150){
+   send({type:"PLAYER_UPDATE",distance:distance,speed:speed});
+   lastUpdate=now;
+  }
+
+  updateUI();
+ }
+
+ requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
