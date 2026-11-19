@@ -1,0 +1,16 @@
+
+name = "drag-dalzz"
+main = "src/index.js"
+compatibility_date = "2026-11-19"
+
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "RaceRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["RaceRoom"]
